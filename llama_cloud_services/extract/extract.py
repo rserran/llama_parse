@@ -9,10 +9,13 @@ import httpx
 from pydantic import BaseModel
 from llama_cloud import (
     ExtractAgent as CloudExtractAgent,
+    ExtractAgentCreate,
     ExtractConfig,
     ExtractJob,
     ExtractJobCreate,
     ExtractRun,
+    ExtractSchemaValidateRequest,
+    ExtractAgentUpdate,
     File,
     ExtractMode,
     StatusEnum,
@@ -114,7 +117,7 @@ class ExtractionAgent:
             )
         validated_schema = self._run_in_thread(
             self._client.llama_extract.validate_extraction_schema(
-                data_schema=processed_schema
+                request=ExtractSchemaValidateRequest(data_schema=processed_schema)
             )
         )
         self._data_schema = validated_schema.data_schema
@@ -187,8 +190,10 @@ class ExtractionAgent:
         self._agent = self._run_in_thread(
             self._client.llama_extract.update_extraction_agent(
                 extraction_agent_id=self.id,
-                data_schema=self.data_schema,
-                config=self.config,
+                request=ExtractAgentUpdate(
+                    data_schema=self.data_schema,
+                    config=self.config,
+                ),
             )
         )
 
@@ -526,11 +531,13 @@ class LlamaExtract(BaseComponent):
 
         agent = self._run_in_thread(
             self._async_client.llama_extract.create_extraction_agent(
-                name=name,
-                data_schema=data_schema,
-                config=config or DEFAULT_EXTRACT_CONFIG,
                 project_id=self._project_id,
                 organization_id=self._organization_id,
+                request=ExtractAgentCreate(
+                    name=name,
+                    data_schema=data_schema,
+                    config=config or DEFAULT_EXTRACT_CONFIG,
+                ),
             )
         )
 
