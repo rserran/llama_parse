@@ -4,6 +4,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 from copy import deepcopy
+from enum import Enum
 from io import BufferedIOBase
 from pathlib import Path, PurePath, PurePosixPath
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
@@ -52,6 +53,14 @@ def build_url(
     return base_url
 
 
+class BackoffPattern(str, Enum):
+    """Backoff pattern for polling."""
+
+    CONSTANT = "constant"
+    LINEAR = "linear"
+    EXPONENTIAL = "exponential"
+
+
 class LlamaParse(BasePydanticReader):
     """A smart-parser for files."""
 
@@ -76,6 +85,15 @@ class LlamaParse(BasePydanticReader):
     check_interval: int = Field(
         default=1,
         description="The interval in seconds to check if the parsing is done.",
+    )
+
+    backoff_pattern: BackoffPattern = Field(
+        default=BackoffPattern.LINEAR,
+        description="Controls the backoff pattern when retrying failed requests: 'constant', 'linear', or 'exponential'.",
+    )
+    max_check_interval: int = Field(
+        default=5,
+        description="Maximum interval in seconds between polling attempts when checking job status.",
     )
 
     custom_client: Optional[httpx.AsyncClient] = Field(
@@ -794,54 +812,87 @@ class LlamaParse(BasePydanticReader):
             if file_handle is not None:
                 file_handle.close()
 
+    def _calculate_backoff(self, current_interval: float) -> float:
+        """Calculate the next backoff interval based on the backoff pattern.
+
+        Args:
+            current_interval: The current interval in seconds
+
+        Returns:
+            The next interval in seconds
+        """
+        if self.backoff_pattern == BackoffPattern.CONSTANT:
+            return current_interval
+        elif self.backoff_pattern == BackoffPattern.LINEAR:
+            return min(current_interval + 1, float(self.max_check_interval))
+        elif self.backoff_pattern == BackoffPattern.EXPONENTIAL:
+            return min(current_interval * 2, float(self.max_check_interval))
+        return current_interval  # Default fallback
+
     async def _get_job_result(
         self, job_id: str, result_type: str, verbose: bool = False
     ) -> Dict[str, Any]:
         start = time.time()
         tries = 0
+        error_count = 0
+        current_interval: float = float(self.check_interval)
 
         # so we're not re-setting the headers & stuff on each
         # usage... assume that there is not some other
         # coro also modifying base_url and the other client related configs.
         client = self.aclient
         while True:
-            await asyncio.sleep(self.check_interval)
-            tries += 1
-            result = await client.get(JOB_STATUS_ROUTE.format(job_id=job_id))
-            if result.status_code != 200:
+            try:
+                await asyncio.sleep(current_interval)
+                tries += 1
+                result = await client.get(JOB_STATUS_ROUTE.format(job_id=job_id))
+                result.raise_for_status()  # this raises if status is not 2xx
+                # Allowed values "PENDING", "SUCCESS", "ERROR", "CANCELED"
+                result_json = result.json()
+                status = result_json["status"]
+                if status == "SUCCESS":
+                    parsed_result = await client.get(
+                        JOB_RESULT_URL.format(job_id=job_id, result_type=result_type),
+                    )
+                    return parsed_result.json()
+                elif status == "PENDING":
+                    end = time.time()
+                    if end - start > self.max_timeout:
+                        raise Exception(f"Timeout while parsing the file: {job_id}")
+                    if verbose and tries % 10 == 0:
+                        print(".", end="", flush=True)
+                    current_interval = self._calculate_backoff(current_interval)
+                else:
+                    error_code = result_json.get("error_code", "No error code found")
+                    error_message = result_json.get(
+                        "error_message", "No error message found"
+                    )
+                    exception_str = (
+                        f"Job ID: {job_id} failed with status: {status}, "
+                        f"Error code: {error_code}, Error message: {error_message}"
+                    )
+                    raise Exception(exception_str)
+            except (
+                httpx.ConnectError,
+                httpx.ReadError,
+                httpx.WriteError,
+                httpx.ConnectTimeout,
+                httpx.ReadTimeout,
+                httpx.WriteTimeout,
+                httpx.HTTPStatusError,
+            ) as err:
+                error_count += 1
                 end = time.time()
                 if end - start > self.max_timeout:
-                    raise Exception(f"Timeout while parsing the file: {job_id}")
+                    raise Exception(
+                        f"Timeout while parsing the file: {job_id}"
+                    ) from err
                 if verbose and tries % 10 == 0:
-                    print(".", end="", flush=True)
-                await asyncio.sleep(self.check_interval)
-                continue
-
-            # Allowed values "PENDING", "SUCCESS", "ERROR", "CANCELED"
-            result_json = result.json()
-            status = result_json["status"]
-            if status == "SUCCESS":
-                parsed_result = await client.get(
-                    JOB_RESULT_URL.format(job_id=job_id, result_type=result_type),
-                )
-                return parsed_result.json()
-
-            elif status == "PENDING":
-                end = time.time()
-                if end - start > self.max_timeout:
-                    raise Exception(f"Timeout while parsing the file: {job_id}")
-                if verbose and tries % 10 == 0:
-                    print(".", end="", flush=True)
-                await asyncio.sleep(self.check_interval)
-
-            else:
-                error_code = result_json.get("error_code", "No error code found")
-                error_message = result_json.get(
-                    "error_message", "No error message found"
-                )
-
-                exception_str = f"Job ID: {job_id} failed with status: {status}, Error code: {error_code}, Error message: {error_message}"
-                raise Exception(exception_str)
+                    print(
+                        f"HTTP error: {err}...",
+                        flush=True,
+                    )
+                current_interval = self._calculate_backoff(current_interval)
 
     async def _aload_data(
         self,
