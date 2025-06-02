@@ -1,6 +1,7 @@
 import tempfile
 import os
 import pytest
+from typing import Optional
 from llama_cloud_services import LlamaParse
 from llama_cloud_services.parse.types import JobResult
 
@@ -15,16 +16,23 @@ def chart_file_path() -> str:
     return "tests/test_files/attention_is_all_you_need_chart.pdf"
 
 
+@pytest.fixture
+def multiple_page_path() -> str:
+    return "tests/test_files/TOS.pdf"
+
+
 @pytest.mark.asyncio
 @pytest.mark.skipif(
     os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
     reason="LLAMA_CLOUD_API_KEY not set",
 )
-async def test_basic_parse_result(file_path: str):
+@pytest.mark.parametrize("partition_pages", [None, 2])
+async def test_basic_parse_result(file_path: str, partition_pages: Optional[int]):
     parser = LlamaParse(
         take_screenshot=True,
         auto_mode=True,
         fast_mode=False,
+        partition_pages=partition_pages,
     )
     result = await parser.aparse(file_path)
 
@@ -142,8 +150,11 @@ async def test_parse_layout(file_path: str):
     os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
     reason="LLAMA_CLOUD_API_KEY not set",
 )
-def test_parse_multiple_files(file_path: str, chart_file_path: str):
-    parser = LlamaParse()
+@pytest.mark.parametrize("partition_pages", [None, 2])
+def test_parse_multiple_files(
+    file_path: str, chart_file_path: str, partition_pages: Optional[int]
+):
+    parser = LlamaParse(partition_pages=partition_pages)
     result = parser.parse([file_path, chart_file_path])
 
     assert isinstance(result, list)
@@ -152,3 +163,40 @@ def test_parse_multiple_files(file_path: str, chart_file_path: str):
     assert isinstance(result[1], JobResult)
     assert result[0].file_name == file_path
     assert result[1].file_name == chart_file_path
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
+    reason="LLAMA_CLOUD_API_KEY not set",
+)
+@pytest.mark.parametrize("partition_pages", [None, 2])
+async def test_multiple_page_parse_result(
+    multiple_page_path: str, partition_pages: Optional[int]
+):
+    parser = LlamaParse(
+        take_screenshot=True,
+        auto_mode=True,
+        fast_mode=False,
+        partition_pages=partition_pages,
+    )
+    results = await parser.aparse(multiple_page_path)
+    if partition_pages is None:
+        assert isinstance(results, JobResult)
+        results = [results]
+    else:
+        assert isinstance(results, list)
+
+    for result in results:
+        assert isinstance(result, JobResult)
+        assert result.job_id is not None
+        assert result.file_name == multiple_page_path
+        assert len(result.pages) > 0
+
+        assert result.pages[0].text is not None
+        assert len(result.pages[0].text) > 0
+
+        assert result.pages[0].md is not None
+        assert len(result.pages[0].md) > 0
+
+        assert result.pages[0].md != result.pages[0].text

@@ -1,6 +1,7 @@
 import os
 import pytest
 import shutil
+from typing import Optional, cast
 from fsspec.implementations.local import LocalFileSystem
 from httpx import AsyncClient
 
@@ -20,11 +21,15 @@ def test_simple_page_text() -> None:
     assert len(result[0].text) > 0
 
 
-@pytest.fixture
-def markdown_parser() -> LlamaParse:
+@pytest.fixture(params=[None, 2])
+def markdown_parser(request: pytest.FixtureRequest) -> LlamaParse:
     if os.environ.get("LLAMA_CLOUD_API_KEY", "") == "":
         pytest.skip("LLAMA_CLOUD_API_KEY not set")
-    return LlamaParse(result_type="markdown", ignore_errors=False)
+    return LlamaParse(
+        result_type="markdown",
+        ignore_errors=False,
+        partition_pages=cast(Optional[int], request.param),
+    )
 
 
 def test_simple_page_markdown(markdown_parser: LlamaParse) -> None:
@@ -35,8 +40,6 @@ def test_simple_page_markdown(markdown_parser: LlamaParse) -> None:
 
 
 def test_simple_page_markdown_bytes(markdown_parser: LlamaParse) -> None:
-    markdown_parser = LlamaParse(result_type="markdown", ignore_errors=False)
-
     filepath = "tests/test_files/attention_is_all_you_need.pdf"
     with open(filepath, "rb") as f:
         file_bytes = f.read()
@@ -51,8 +54,6 @@ def test_simple_page_markdown_bytes(markdown_parser: LlamaParse) -> None:
 
 
 def test_simple_page_markdown_buffer(markdown_parser: LlamaParse) -> None:
-    markdown_parser = LlamaParse(result_type="markdown", ignore_errors=False)
-
     filepath = "tests/test_files/attention_is_all_you_need.pdf"
     with open(filepath, "rb") as f:
         # client must provide extra_info with file_name
@@ -161,9 +162,12 @@ async def test_mixing_input_types() -> None:
     os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
     reason="LLAMA_CLOUD_API_KEY not set",
 )
+@pytest.mark.parametrize("partition_pages", [None, 2])
 @pytest.mark.asyncio
-async def test_download_images() -> None:
-    parser = LlamaParse(result_type="markdown", take_screenshot=True)
+async def test_download_images(partition_pages: Optional[int]) -> None:
+    parser = LlamaParse(
+        result_type="markdown", take_screenshot=True, partition_pages=partition_pages
+    )
     filepath = "tests/test_files/attention_is_all_you_need.pdf"
     json_result = await parser.aget_json([filepath])
 
@@ -175,3 +179,17 @@ async def test_download_images() -> None:
 
     await parser.aget_images(json_result, download_path)
     assert len(os.listdir(download_path)) == len(json_result[0]["pages"][0]["images"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("split_by_page,expected", [(True, 4), (False, 1)])
+async def test_multiple_page_markdown(
+    markdown_parser: LlamaParse,
+    split_by_page: bool,
+    expected: int,
+) -> None:
+    markdown_parser.split_by_page = split_by_page
+    filepath = "tests/test_files/TOS.pdf"
+    result = await markdown_parser.aload_data(filepath)
+    assert len(result) == expected
+    assert all(len(doc.text) > 0 for doc in result)
