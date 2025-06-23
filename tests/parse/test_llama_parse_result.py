@@ -109,6 +109,7 @@ async def test_parse_structured_output(file_path: str):
     parser = LlamaParse(
         structured_output=True,
         structured_output_json_schema_name="imFeelingLucky",
+        invalidate_cache=True,
     )
     result = await parser.aparse(file_path)
     assert isinstance(result, JobResult)
