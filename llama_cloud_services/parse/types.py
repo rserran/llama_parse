@@ -43,7 +43,7 @@ class PageItem(BaseModel):
     md: Optional[str] = Field(
         default=None, description="The markdown-formatted content of the item."
     )
-    rows: Optional[List[List[str]]] = Field(
+    rows: Optional[List[List[Any]]] = Field(
         default=None, description="The rows of the item."
     )
     bBox: Optional[BBox] = Field(
