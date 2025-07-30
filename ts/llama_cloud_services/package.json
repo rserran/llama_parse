@@ -1,0 +1,120 @@
+{
+  "name": "llama-cloud-services",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "generate": "./node_modules/.bin/openapi-ts",
+    "build": "pnpm run generate && bunchee",
+    "dev": "bunchee --watch",
+    "lint": "eslint src/ --ignore-pattern client/*.ts --no-warn-ignored",
+    "format": "prettier --write ./src/",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
+  },
+  "files": [
+    "openapi.json",
+    "./dist",
+    "./api",
+    "./reader",
+    "./parse",
+    "./beta/agent"
+  ],
+  "exports": {
+    "./openapi.json": "./openapi.json",
+    "./beta/agent": {
+      "require": {
+        "types": "./beta/agent/dist/index.d.cts",
+        "default": "./beta/agent/dist/index.cjs"
+      },
+      "import": {
+        "types": "./beta/agent/dist/index.d.ts",
+        "default": "./beta/agent/dist/index.js"
+      },
+      "default": "./beta/agent/dist/index.js"
+    },
+    "./api": {
+      "require": {
+        "types": "./api/dist/index.d.cts",
+        "default": "./api/dist/index.cjs"
+      },
+      "import": {
+        "types": "./api/dist/index.d.ts",
+        "default": "./api/dist/index.js"
+      },
+      "default": "./api/dist/index.js"
+    },
+    "./reader": {
+      "require": {
+        "types": "./reader/dist/index.d.cts",
+        "default": "./reader/dist/index.cjs"
+      },
+      "import": {
+        "types": "./reader/dist/index.d.ts",
+        "default": "./reader/dist/index.js"
+      },
+      "default": "./reader/dist/index.js"
+    },
+    "./parse": {
+      "require": {
+        "types": "./parse/dist/index.d.cts",
+        "default": "./parse/dist/index.cjs"
+      },
+      "import": {
+        "types": "./parse/dist/index.d.ts",
+        "default": "./parse/dist/index.js"
+      },
+      "default": "./parse/dist/index.js"
+    },
+    ".": {
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "default": "./dist/index.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/run-llama/llama_cloud_services.git",
+    "directory": "ts/llama_cloud_services"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@hey-api/client-fetch": "^0.10.1",
+    "@hey-api/openapi-ts": "^0.67.5",
+    "@llama-flow/core": "^0.4.1",
+    "@llamaindex/core": "^0.6.18",
+    "@llamaindex/env": "^0.1.30",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/ui": "^2.0.0",
+    "bunchee": "^6.5.4",
+    "eslint": "^9.32.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.5",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.38.0",
+    "vitest": "^2.0.0"
+  },
+  "peerDependencies": {
+    "@llama-flow/core": "^0.4.1",
+    "@llamaindex/core": "^0.6.18",
+    "@llamaindex/env": "^0.1.30",
+    "llamaindex": "^0.11.23"
+  },
+  "dependencies": {
+    "p-retry": "^6.2.1",
+    "zod": "^3.25.76"
+  },
+  "packageManager": "pnpm@10.8.1"
+}
