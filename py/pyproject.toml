@@ -12,7 +12,8 @@ dev = [
   "deepdiff>=8.1.1,<9",
   "ipython>=8.12.3,<9",
   "jupyter>=1.1.1,<2",
-  "mypy>=1.14.1,<2"
+  "mypy>=1.14.1,<2",
+  "pydantic-settings>=2.10.1"
 ]
 
 [project]
