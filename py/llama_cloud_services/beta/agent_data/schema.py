@@ -56,7 +56,6 @@ from typing import (
 
 # Type variable for user-defined data models
 AgentDataT = TypeVar("AgentDataT", bound=BaseModel)
-
 # Type variable for extracted data (can be dict or Pydantic model)
 ExtractedT = TypeVar("ExtractedT", bound=Union[BaseModel, dict])
 
@@ -116,10 +115,10 @@ class TypedAgentData(BaseModel, Generic[AgentDataT]):
         Args:
             raw_data: Raw agent data from the API
             validator: Pydantic model class to validate the data field
-
         Returns:
             TypedAgentData instance with validated data
         """
+
         data: AgentDataT = validator.model_validate(raw_data.data)
 
         return cls(

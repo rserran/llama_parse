@@ -56,7 +56,7 @@ def test_typed_agent_data_from_raw():
 
 
 def test_typed_agent_data_from_raw_validation_error():
-    """Test TypedAgentData.from_raw with invalid data."""
+    """Test TypedAgentData.from_raw with invalid data now raises InvalidTypedAgentData."""
     raw_data = AgentData(
         id="789",
         deployment_name="test-agent",
