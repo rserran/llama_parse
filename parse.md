@@ -147,7 +147,7 @@ documents = SimpleDirectoryReader(
 ).load_data()
 ```
 
-Full documentation for `SimpleDirectoryReader` can be found on the [LlamaIndex Documentation](https://docs.llamaindex.ai/en/stable/module_guides/loading/simpledirectoryreader.html).
+Full documentation for `SimpleDirectoryReader` can be found on the [LlamaIndex Documentation](https://developers.llamaindex.ai/python/framework/module_guides/loading/simpledirectoryreader/).
 
 ## Examples
 
