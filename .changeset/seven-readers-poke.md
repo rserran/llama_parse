@@ -2,4 +2,4 @@
 "llama-cloud-services-py": patch
 ---
 
-Make markdown safe for jupyter notebooks
+Escape dollar signs in jupyter notebooks
