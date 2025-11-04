@@ -23,21 +23,30 @@ function textToFile(text: string, fileName: string | null = null) {
   );
 }
 
-export async function uploadFile(
-  filePath: string | undefined = undefined,
-  fileContent:
+export async function uploadFile({
+  filePath,
+  fileContent,
+  fileName,
+  project_id,
+  organization_id,
+  client,
+  maxRetriesOnError = 10,
+  retryInterval = 0.5,
+}: {
+  filePath?: string | undefined;
+  fileContent?:
     | Buffer<ArrayBufferLike>
     | File
     | Uint8Array<ArrayBuffer>
     | string
-    | undefined = undefined,
-  fileName: string | undefined = undefined,
-  project_id: string | null = null,
-  organization_id: string | null = null,
-  client: Client | undefined = undefined,
-  maxRetriesOnError: number = 10,
-  retryInterval: number = 0.5,
-): Promise<string | undefined> {
+    | undefined;
+  fileName?: string | undefined;
+  project_id?: string | undefined;
+  organization_id?: string | undefined;
+  client?: Client | undefined;
+  maxRetriesOnError?: number;
+  retryInterval?: number;
+}): Promise<string | undefined> {
   let file: File | undefined = undefined;
   if (typeof filePath === "undefined" && typeof fileContent === "undefined") {
     throw new Error(
@@ -79,7 +88,7 @@ export async function uploadFile(
   } as BodyUploadFileApiV1FilesPost;
   const uploadData = {
     body: fileToUpload,
-    query: { organization_id: organization_id, project_id: project_id },
+    query: { project_id: project_id, organization_id: organization_id },
   } as UploadFileApiV1FilesPostData;
   const uploadOptions = uploadData as Options<UploadFileApiV1FilesPostData>;
   if (typeof client != "undefined") {
@@ -95,6 +104,8 @@ export async function uploadFile(
     const uploadResponse = await uploadFileApiV1FilesPost(uploadOptions);
     let fileId: string | undefined = undefined;
     if (!uploadResponse.response.ok) {
+      const error = await uploadResponse.response.text();
+      console.error("Error while uploading file: ", error);
       retries++;
       await sleep(retryInterval * 1000);
     }
