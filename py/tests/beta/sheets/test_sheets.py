@@ -10,8 +10,10 @@ from llama_cloud_services.beta.sheets.types import SpreadsheetParsingConfig
 @pytest.fixture
 def sheets_client():
     """Create a LlamaSheets client for testing."""
-    api_key = os.getenv("LLAMA_CLOUD_API_KEY")
-    base_url = os.getenv("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai")
+    api_key = os.getenv(
+        "LLAMA_CLOUD_API_KEY", "llx-3AEorIw5v0lnJPzEOI9xSl0N8yFx3fguw0Zn8QJHzGWmwg5r"
+    )
+    base_url = os.getenv("LLAMA_CLOUD_BASE_URL", "https://api.staging.llamaindex.ai")
 
     client = LlamaSheets(
         api_key=api_key,
@@ -49,7 +51,10 @@ def sample_excel_file():
 
 
 @pytest.mark.skipif(
-    os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
+    os.environ.get(
+        "LLAMA_CLOUD_API_KEY", "llx-3AEorIw5v0lnJPzEOI9xSl0N8yFx3fguw0Zn8QJHzGWmwg5r"
+    )
+    == "",
     reason="LLAMA_CLOUD_API_KEY not set",
 )
 @pytest.mark.asyncio
@@ -65,30 +70,30 @@ async def test_spreadsheet_extraction_e2e(
     4. Verifies the extracted data matches the original data
     """
     # Extract tables from the spreadsheet
-    result = await sheets_client.aextract_tables(sample_excel_file)
+    result = await sheets_client.aextract_regions(sample_excel_file)
 
     # Verify job completed successfully
     assert result.status in ("SUCCESS", "PARTIAL_SUCCESS")
     assert result.success is True
 
     # Verify we extracted at least one table
-    assert len(result.tables) > 0, "Expected at least one table to be extracted"
+    assert len(result.regions) > 0, "Expected at least one table to be extracted"
 
     # Get the first table
-    first_table = result.tables[0]
+    first_table = result.regions[0]
     assert first_table.sheet_name == "TestSheet"
 
     # Download the table as a DataFrame
-    extracted_df = await sheets_client.adownload_table_as_dataframe(
+    extracted_df = await sheets_client.adownload_region_as_dataframe(
         job_id=result.id,
-        table_id=first_table.table_id,
+        region_id=first_table.region_id,
+        result_type=first_table.region_type,
     )
 
     # Load the original dataframe for comparison
     original_df = pd.read_excel(sample_excel_file)
 
     # Verify the extracted DataFrame has the expected shape
-    breakpoint()
     assert extracted_df.shape[0] == original_df.shape[0], (
         f"Row count mismatch: extracted {extracted_df.shape[0]}, "
         f"original {original_df.shape[0]}"
@@ -129,7 +134,10 @@ async def test_spreadsheet_extraction_e2e(
 
 
 @pytest.mark.skipif(
-    os.environ.get("LLAMA_CLOUD_API_KEY", "") == "",
+    os.environ.get(
+        "LLAMA_CLOUD_API_KEY", "llx-3AEorIw5v0lnJPzEOI9xSl0N8yFx3fguw0Zn8QJHzGWmwg5r"
+    )
+    == "",
     reason="LLAMA_CLOUD_API_KEY not set",
 )
 @pytest.mark.asyncio
@@ -145,7 +153,7 @@ async def test_spreadsheet_extraction_with_config(
     )
 
     # Extract tables with the config
-    result = await sheets_client.aextract_tables(sample_excel_file, config=config)
+    result = await sheets_client.aextract_regions(sample_excel_file, config=config)
 
     # Verify job completed successfully
     assert result.status in ("SUCCESS", "PARTIAL_SUCCESS")
@@ -157,7 +165,7 @@ async def test_spreadsheet_extraction_with_config(
     assert result.worksheet_metadata[0].description is not None
 
     # Verify we extracted at least one table
-    assert len(result.tables) > 0
+    assert len(result.regions) > 0
 
     # Verify the sheet name matches
-    assert result.tables[0].sheet_name == "TestSheet"
+    assert result.regions[0].sheet_name == "TestSheet"
