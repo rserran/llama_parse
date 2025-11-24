@@ -24,8 +24,8 @@ from workflows import Context
 
 dotenv.load_dotenv()
 
-# Global context for loaded dataframes
-_dataframe_context: Dict[str, Any] = {}
+# Global context for executed code
+_code_context: Dict[str, Any] = {}
 
 
 # Helper function for initial agent context
@@ -79,36 +79,30 @@ def list_extracted_data(data_dir: str = "data") -> str:
 
 
 # Agent tool for code execution against dataframes
-def execute_dataframe_code(
-    code: str, load_files: Optional[Dict[str, str]] = None
-) -> str:
+def execute_code(code: str) -> str:
     """
-        Execute Python pandas code against LlamaSheets extracted data.
+    Execute Python pandas code against LlamaSheets extracted data.
 
-        This tool allows flexible data analysis by executing arbitrary pandas code.
-        You can load parquet files, manipulate dataframes, and return results.
+    This tool allows flexible data analysis by executing arbitrary pandas code.
+    You can load parquet files, manipulate dataframes, and return results.
 
-        The code executes in a context where:
-        - pandas is available as 'pd'
-        - json is available for formatting output
-        - Previously loaded dataframes are accessible by their variable names
+    The code executes in a context where:
+    - pandas is available as 'pd'
+    - json is available for formatting output
 
-        Args:
-            code: Python code to execute. Any print() statements or stdout/stderr
-                  will be captured and returned. Optionally set a 'result' variable
-                  for structured output.
-            load_files: Optional dict mapping variable names to file paths to load
-                       Example: {"df": "data/sales_region_1.parquet",
-                                "meta": "data/sales_metadata_1.parquet"}
+    Args:
+        code: Python code to execute. Any print() statements or stdout/stderr
+                will be captured and returned. Optionally set a 'result' variable
+                for structured output.
 
-        Returns:
-            String containing:
-            - Any stdout/stderr output from the code execution
-            - The 'result' variable if it was set (formatted appropriately)
-            - Error message if execution failed
+    Returns:
+        String containing:
+        - Any stdout/stderr output from the code execution
+        - The 'result' variable if it was set (formatted appropriately)
+        - Error message if execution failed
 
-        Example usage:
-            code = '''
+    Example usage:
+        code = '''
     # Load and inspect data
     df = pd.read_parquet("data/sales_region_1.parquet")
     print(f"Loaded {len(df)} rows")
@@ -118,9 +112,9 @@ def execute_dataframe_code(
         "columns": list(df.columns),
         "sample": df.head(3).to_dict(orient="records")
     }
-            '''
+        '''
     """
-    global _dataframe_context
+    global _code_context
 
     # Capture stdout and stderr
     stdout_capture = io.StringIO()
@@ -138,23 +132,16 @@ def execute_dataframe_code(
             "pd": pd,
             "json": json,
             "Path": Path,
-            **_dataframe_context,  # Include previously loaded dataframes
+            **_code_context,  # Include previously loaded dataframes
         }
-
-        # Load any requested files into context
-        if load_files:
-            for var_name, file_path in load_files.items():
-                if file_path.endswith(".parquet"):
-                    exec_context[var_name] = pd.read_parquet(file_path)
-                    # Also save to global context for future calls
-                    _dataframe_context[var_name] = exec_context[var_name]
-                elif file_path.endswith(".json"):
-                    with open(file_path, "r") as f:
-                        exec_context[var_name] = json.load(f)
-                        _dataframe_context[var_name] = exec_context[var_name]
 
         # Execute the code
         exec(code, exec_context)
+
+        # Update global context with any new variables (excluding built-ins and modules)
+        for key, value in exec_context.items():
+            if not key.startswith("_") and key not in ["pd", "json", "Path"]:
+                _code_context[key] = value
 
         # Restore stdout/stderr
         sys.stdout = old_stdout
@@ -223,8 +210,8 @@ def create_llamasheets_agent(
     # Initialize LLM
     llm = OpenAI(model=llm_model, api_key=api_key)
 
-    # Create tools - just 4 simple but powerful tools
-    tools = [execute_dataframe_code]
+    # Create tools list
+    tools = [execute_code]
 
     # System prompt to guide the agent
     available_regions = list_extracted_data()
@@ -238,11 +225,8 @@ LlamaSheets extracts messy spreadsheets into clean parquet files with two types 
    - Type detection: data_type, is_date_like, is_percentage, is_currency
    - Layout: is_in_first_row, is_merged_cell, horizontal_alignment
 
-Your approach:
-1. Use list_extracted_data() to discover available files
-2. Use execute_dataframe_code() to load and analyze data with pandas
-3. Use metadata to understand structure (bold = headers, colors = groups)
-4. Use save_dataframe() to export results
+You have access to tools that allow you to execute Python pandas code against these files.
+Use these tools to load the parquet files, analyze the data, and return results.
 
 Key tips:
 - Bold cells in metadata often indicate headers
@@ -299,7 +283,7 @@ async def main():
                 print(ev.delta, end="", flush=True)
 
         _ = await handler
-        print("=== End Query ===\n")
+        print("\n=== End Query ===\n")
 
 
 if __name__ == "__main__":
